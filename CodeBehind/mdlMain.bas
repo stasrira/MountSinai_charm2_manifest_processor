@@ -197,9 +197,10 @@ Public Function GetItemValueFromSpecimenHeader(item_name As String, Optional spe
 End Function
 
 'prepares aliquot_id value based on the provided row number (on the "shipment" tab)
-Public Function GetAliqoutId(row_num As Integer) As String
+Public Function GetAliquotId(row_num As Integer) As String
     Dim specimen_prep_abbr As String
     Dim sample_id As String, aliquot_id As String
+    Dim subject_id As String, date_part As String
     
     'get samlpe_id for the current row
     sample_id = GetSampleId(row_num)
@@ -207,12 +208,21 @@ Public Function GetAliqoutId(row_num As Integer) As String
     If Len(Trim(sample_id)) > 0 Then
         'get specimen prep abbreviation value out of the Specimen prep column's header
         specimen_prep_abbr = GetItemValueFromSpecimenHeader("specimen_prep_abbr")
+        'get visit date value through the subject id assigned to the current row
+        subject_id = GetCellValuePerRow(row_num, "Participant Id_shipment")
+        date_part = convertDate(GetColumnValueBySubjectID("Visit Date", subject_id), "yymmdd")
+        
         'concatenate sample id and specimen prep to get aliquot id
-        aliquot_id = sample_id & "-" & Trim(specimen_prep_abbr)
+        aliquot_id = sample_id & "-" & date_part & "-" & Trim(specimen_prep_abbr)
+        
+'        If date_part = "" Then
+'            'Log error that aliquot id was not properly created
+'            AddLogEntry "Cannot obtain 'Visit Date' value for the subject '" & subject_id & "' while preparing an aliquot id for it - " & aliquot_id & ".", LogMsgType.Error
+'        End If
     Else
         aliquot_id = ""
     End If
-    GetAliqoutId = aliquot_id
+    GetAliquotId = aliquot_id
 End Function
 
 'prepares sample_id value based on the provided row number (on the "shipment" tab)
@@ -449,9 +459,9 @@ Private Function GetFileNameToSave(file_type As String)
         ship_date = Date
     End If
     
-    ship_date = Format(ship_date, "yyyy_mm_dd")
+    ship_date = format(ship_date, "yyyy_mm_dd")
     
-    GetFileNameToSave = "CHARM_" & file_type & "_" & ship_date & "_" & timepoint & "_" & spec_prep & "_prepared_internally" & Trim(post_fix) & ".xlsx"
+    GetFileNameToSave = "CHARM2_" & file_type & "_" & ship_date & "_" & timepoint & "_" & spec_prep & "_prepared_internally" & Trim(post_fix) & ".xlsx"
 End Function
 
 Private Function CreateNewFile(file_type As String, file_name As String) As Workbook
@@ -836,7 +846,7 @@ End Sub
 
 Private Sub DeleteBlankRows(ws_target As Worksheet)
     Dim SourceRange As Range
-    Dim EntireRow As Range
+    Dim entireRow As Range
     Dim i As Long, non_blanks As Long, empty_strings As Long
  
     Set SourceRange = ws_target.UsedRange ' Cells.End(xlToLeft)
@@ -845,11 +855,11 @@ Private Sub DeleteBlankRows(ws_target As Worksheet)
         'Application.ScreenUpdating = False
  
         For i = SourceRange.Rows.Count To 1 Step -1
-            Set EntireRow = SourceRange.Cells(i, 1).EntireRow
-            non_blanks = Application.WorksheetFunction.CountA(EntireRow)
-            empty_strings = Application.WorksheetFunction.CountIf(EntireRow, "")
-            If non_blanks = 0 Or EntireRow.Cells.Count = empty_strings Then
-                EntireRow.Delete
+            Set entireRow = SourceRange.Cells(i, 1).entireRow
+            non_blanks = Application.WorksheetFunction.CountA(entireRow)
+            empty_strings = Application.WorksheetFunction.CountIf(entireRow, "")
+            If non_blanks = 0 Or entireRow.Cells.Count = empty_strings Then
+                entireRow.Delete
             Else
                 'Print ("Not blank row")
             End If
@@ -1089,13 +1099,16 @@ Sub CopyDataFromFile(ws_target As Worksheet, _
     End If
     
     src.Worksheets(src_worksheet_name).Cells.Copy 'copy into a clipboard
-    ws_target.Cells.PasteSpecial Paste:=xlPasteAll 'paste to the worksheet
+    ws_target.Cells.PasteSpecial Paste:=xlPasteAll 'paste to the worksheet 'xlPasteValues
     Application.CutCopyMode = False 'clean clipboard
     
   
     ' CLOSE THE SOURCE FILE.
     src.Close False             ' FALSE - DON'T SAVE THE SOURCE FILE.
     Set src = Nothing
+    
+    'update the first column to text values
+    CleanAndUpdateColumnValuesToText ws_target, "A"
     
     Application.ScreenUpdating = True
     
@@ -1105,6 +1118,31 @@ ErrHandler:
     MsgBox Err.Description, vbCritical
     Application.EnableEvents = True
     Application.ScreenUpdating = True
+End Sub
+
+Public Sub CleanAndUpdateColumnValuesToText(ws_target As Worksheet, update_col As String, _
+                                    Optional start_row As Integer = 2, _
+                                    Optional deleteRowsOfBlankValues As Boolean = True)
+    
+    Dim used_rows As Integer
+    Dim rng As Range, cell As Range
+    Dim entireRow As Range
+    
+    used_rows = ws_target.UsedRange.Rows.Count
+    
+    Set rng = ws_target.Range(update_col & start_row & ":" & update_col & used_rows)
+    
+    For Each cell In rng
+        If deleteRowsOfBlankValues Then
+            If Trim(cell.Value) = "" Then
+                cell.entireRow.Delete
+            Else
+                cell.Value = "'" & Trim(cell.Value)
+            End If
+        Else
+            cell.Value = "'" & Trim(cell.Value)
+        End If
+    Next
 End Sub
 
 Public Sub OpenHelpLink()
@@ -1174,7 +1212,7 @@ Function AddLogEntry(msg As String, msg_type As LogMsgType, Optional wb As Workb
     
     If row_new = 1 Then
         'if the last row is the first row on the page, check if it is blank - meaning that sheet is blank and the first value is being added
-        Set entire_row = ws_log.Cells(row_new, 1).EntireRow 'get the first row as a range
+        Set entire_row = ws_log.Cells(row_new, 1).entireRow 'get the first row as a range
         non_blanks = Application.WorksheetFunction.CountA(entire_row) 'count number of non blank values
         
         'if some values are present, increment the new_row by one, otherwise use the first row to put new log info into it
@@ -1323,8 +1361,12 @@ End Function
 Private Function ValidateGivenSpecimenTimepointColumn(col As String) As ValidationResults
     Dim specimen_header As String, specimen_letter As String
     Dim valid_result1 As ValidationResults, valid_result2 As ValidationResults, valid_result As ValidationResults
-    Dim valid_result3 As ValidationResults, valid_result4 As ValidationResults
-   
+    Dim valid_result3 As ValidationResults, valid_result4 As ValidationResults, valid_result5 As ValidationResults
+    
+    AddLogEntry "Start validating Visit Dates.", LogMsgType.info
+    valid_result5 = ValidateVisitDates
+    AddLogEntry "Finish validating Visit Dates.", LogMsgType.info
+    
     'get specimen column header
     specimen_header = Worksheets(ShipmentWrkSheet).Range(col & "1") 'GetCellValuePerRow(1, "Specimen Column")
     'get config value corresponding to the column letter on the shipment tab
@@ -1348,15 +1390,51 @@ Private Function ValidateGivenSpecimenTimepointColumn(col As String) As Validati
     
     'valid_result = valid_result1 And valid_result2
     'figure out the final status
-    If valid_result1 = ValidationResults.Error Or valid_result2 = ValidationResults.Error Or valid_result3 = ValidationResults.Error Or valid_result4 = ValidationResults.Error Then
+    If valid_result1 = ValidationResults.Error Or valid_result2 = ValidationResults.Error Or valid_result3 = ValidationResults.Error Or _
+        valid_result4 = ValidationResults.Error Or valid_result5 = ValidationResults.Error Then
         valid_result = ValidationResults.Error
-    ElseIf valid_result1 = ValidationResults.warning Or valid_result2 = ValidationResults.warning Or valid_result3 = ValidationResults.warning Or valid_result4 = ValidationResults.warning Then
+    ElseIf valid_result1 = ValidationResults.warning Or valid_result2 = ValidationResults.warning Or valid_result3 = ValidationResults.warning Or _
+        valid_result4 = ValidationResults.warning Or valid_result5 = ValidationResults.warning Then
         valid_result = ValidationResults.warning
     Else
         valid_result = ValidationResults.OK
     End If
     
     ValidateGivenSpecimenTimepointColumn = valid_result
+End Function
+
+Public Function ValidateVisitDates() As ValidationResults
+    Dim visit_col_name As String, ws_name As String
+    Dim visit_col As Range, subject_col As Range, cell As Range
+    Dim used_rows As Integer
+    Dim subject_col_name As String, subject_id As String, timepoint_mark As String
+    Dim out As ValidationResults
+    
+    out = ValidationResults.OK
+    
+    subject_col_name = GetConfigParameterValue("Participant Id_shipment")
+    visit_col_name = GetConfigParameterValue("Visit Date")
+    ws_name = GetConfigParameterValue_SheetAssignment("Visit Date")
+    
+    Set subject_col = Worksheets(ws_name).Range(subject_col_name & ":" & subject_col_name)
+    used_rows = Worksheets(ws_name).Cells(Rows.Count, subject_col.Column).End(xlUp).Row
+    Set visit_col = Worksheets(ws_name).Range(visit_col_name & "2:" & visit_col_name & CStr(used_rows))
+    
+    For Each cell In visit_col
+        'get value of this row for the currently processed Speciment column (value "Y" is expected)
+        timepoint_mark = GetCellValuePerRow(cell.Row, "Specimen Column")
+        'check if the row has a "Y" entry, otherwise skip this check.
+        If timepoint_mark = "Y" And Not IsDate(cell.Value) Then
+            out = ValidationResults.Error
+            subject_id = GetCellValuePerRow(cell.Row, "Participant Id_shipment")
+            AddLogEntry "Provided 'Visit Date' value ('" & cell.Value & "') for the subject '" & subject_id & _
+                "' is not a date (see row #" & CStr(cell.Row) & " on the 'shipment' tab). Due to that, a properly structured aliquot id cannot be prepared.", LogMsgType.Error
+        End If
+            
+    Next
+    
+    ValidateVisitDates = out
+    
 End Function
 
 Private Function ValidateSpecimenTimepointHeader(specimen_header As String) As ValidationResults
@@ -1375,11 +1453,11 @@ Private Function ValidateSpecimenTimepointHeader(specimen_header As String) As V
     'check if the general structure of the provided header is OK
     If ArrLength(arr) = 0 Then
         general_validation_failed = True
-        AddLogEntry "Provided specimen prep/timepoint value is blank.", LogMsgType.Error
+        AddLogEntry "Provided specimen prep value is blank.", LogMsgType.Error
     End If
     If ArrLength(arr) > 1 Then
         general_validation_failed = True
-        AddLogEntry "Provided specimen prep/timepoint value '" & specimen_header & "' has extra component(s).", LogMsgType.Error
+        AddLogEntry "Provided specimen prep value '" & specimen_header & "' has extra component(s).", LogMsgType.Error
     End If
     
     'proceed with additional validation checks only if there was no general validation rules were OK
@@ -1822,6 +1900,51 @@ End Function
 
 Public Function get_string_val(pid_val As String) As String
     get_string_val = pid_val
+End Function
+
+Public Function convertDate(date_val As String, Optional format_str As String = "yymmdd") As String
+    Dim str_year As String, str_month As String, str_day As String
+    Dim out As String
+    
+    If IsDate(date_val) Then
+        out = format(date_val, format_str)
+    Else
+        out = ""
+    End If
+    convertDate = out
+    
+    Exit Function
+    
+'    If IsDate(date_val) Then
+'        'check for year
+'        If InStr(format_str, "yyyy") Then
+'            str_year = year(date_val)
+'        ElseIf InStr(format_str, "yy") Then
+'            str_year = Right(year(date_val), 2)
+'        Else
+'            str_year = ""
+'        End If
+'
+'        If InStr(format_str, "mm") Then
+'            str_month = Right("0" & CStr(month(date_val)), 2)
+'        Else
+'            str_month = ""
+'        End If
+'
+'        If InStr(format_str, "dd") Then
+'            str_day = Right("0" & CStr(day(date_val)), 2)
+'        Else
+'            str_day = ""
+'        End If
+'
+'        out = Replace(format_str, "yyyy", str_year)
+'        out = Replace(out, "yy", str_year)
+'        out = Replace(out, "mm", str_month)
+'        out = Replace(out, "dd", str_day)
+'    Else
+'        out = ""
+'    End If
+'    convertDate = out
 End Function
 
 '--------------------------------------

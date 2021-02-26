@@ -1,7 +1,7 @@
 Attribute VB_Name = "mdlMain"
 Option Explicit
 
-Public Const Version = "2.00"
+Public Const Version = "1.00"
 
 Private Const ShipmentWrkSheet = "shipment"
 Private Const DemographicWrkSheet = "study_demographic"
@@ -505,7 +505,7 @@ Function SavePreparedFiles(Optional show_confirmation As Boolean = True) As dict
                     & "Be aware that some output files will be created as an otcome of the process!" _
                     & vbCrLf & vbCrLf & "Do you want to proceed? If not, click 'Cancel'." & vbCrLf & vbCrLf _
                     & "Note: some screen flickering might occur during creating of output excel files.", _
-                    vbOKCancel + vbInformation, "CHARM Manifest Processor")
+                    vbOKCancel + vbInformation, "CHARM2 Manifest Processor")
     Else
         iResponse = vbOK
     End If
@@ -929,7 +929,7 @@ Public Sub ProcessAllSpecimens()
                 & "Be aware that some output files will be created as an otcome of the process!" _
                 & vbCrLf & vbCrLf & "Do you want to proceed? If not, click 'Cancel'." & vbCrLf & vbCrLf _
                 & "Note: some screen flickering might occur during creating of output excel files.", _
-                vbOKCancel + vbInformation, "CHARM Manifest Processor")
+                vbOKCancel + vbInformation, "CHARM2 Manifest Processor")
     
     If iResponse <> vbOK Then
         'exit sub based on user's response
@@ -1050,7 +1050,7 @@ Private Sub ImportFile(ws_target As Worksheet, file_type_to_open As String)
             & strFileToOpen & vbCrLf _
             & " was successfully loaded to the '" & ws_target.Name & "' tab." & vbCrLf & vbCrLf _
             & "Note: you might need to review settings of the 'config' tab to make sure that those are set correctly. " _
-            & "Please pay special attention to the highlighed rows.", vbInformation, "CHARM Manifest Processor"
+            & "Please pay special attention to the highlighed rows.", vbInformation, "CHARM2 Manifest Processor"
     
     Exit Sub
     
@@ -1691,10 +1691,10 @@ err_lab:
 End Function
 
 Public Sub ShowVersionMsg()
-    MsgBox "CHARM Manifest Processor - version #" & Version _
+    MsgBox "CHARM2 Manifest Processor - version #" & Version _
     & vbCrLf & vbCrLf _
     & "Please send any comment and questions about this tool to 'stas.rirak@mssm.edu'", _
-    vbInformation, "CHARM Manifest Processor"
+    vbInformation, "CHARM2 Manifest Processor"
 End Sub
 
 Public Sub Convert_LabStats_To_Shipment_File()
@@ -1826,7 +1826,7 @@ Sub DuplicateColumnsAsPlasma(config_param As String, Optional show_confirmation 
         End Select
     
         'if the function runs not as a part of bigger process, confirm if user want to proceed.
-        iResponse = MsgBox(msg1, vbOKCancel + vbInformation, "CHARM Manifest Processor")
+        iResponse = MsgBox(msg1, vbOKCancel + vbInformation, "CHARM2 Manifest Processor")
     Else
         iResponse = vbOK
     End If

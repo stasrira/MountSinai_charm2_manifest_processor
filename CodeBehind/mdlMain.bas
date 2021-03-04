@@ -1,7 +1,7 @@
 Attribute VB_Name = "mdlMain"
 Option Explicit
 
-Public Const Version = "1.00"
+Public Const Version = "1.01"
 
 Private Const ShipmentWrkSheet = "shipment"
 Private Const DemographicWrkSheet = "study_demographic"
@@ -74,7 +74,7 @@ Private Function GetDictItems(dict_name As String) As Scripting.dictionary
 End Function
 
 'gets value of the cell (from "shipment" tab) based on the given config parameter name (that identifies the column) and given row number
-Public Function GetCellValuePerRow(row_num As Integer, cfg_param_name As String) As String
+Private Function GetCellValuePerRow(row_num As Integer, cfg_param_name As String) As String
     Dim cfg_row As Integer
     Dim column_letter As String
     Dim out_val As String
@@ -107,6 +107,25 @@ Private Function GetConfigParameterValueByColumn(cfg_param_name As String, colum
         out_val = ""
     End If
     GetConfigParameterValueByColumn = out_val
+End Function
+
+Private Function SetConfigParameterValueByColumn(cfg_param_name As String, column_letter As String, value_to_set As String, Optional wb As Workbook = Nothing)
+    Dim cfg_row As Integer
+    Dim out_val As String
+    Dim ws_cfg As Worksheet
+    
+    If wb Is Nothing Then
+        Set ws_cfg = Worksheets(ConfigWrkSheet)
+    Else
+        Set ws_cfg = wb.Worksheets(ConfigWrkSheet)
+    End If
+    
+    'get config value to identify column letter on the shipment tab
+    cfg_row = FindRowNumberOfConfigParam(cfg_param_name, wb)
+    If cfg_row > 0 Then
+        'set configuration value
+        ws_cfg.Range(column_letter & CStr(cfg_row)).Value = value_to_set
+    End If
 End Function
 
 Private Function GetConfigParameterValue(cfg_param_name As String, Optional wb As Workbook = Nothing) As String
@@ -1044,6 +1063,15 @@ Private Sub ImportFile(ws_target As Worksheet, file_type_to_open As String)
     
     CopyDataFromFile s, strFileToOpen 'copy date of the main sheet from the source file to the given ws_target sheet
     
+    Select Case file_type_to_open
+        Case "SHIPMENT"
+            'update the first column to text values
+            CleanAndUpdateColumnValuesToText s, "A"
+            
+            'save the name of the loaded shipment file (only name of the file will be saved, no path)
+            SetConfigParameterValueByColumn "Last Loaded Shipment File", "B", Dir(strFileToOpen)
+    End Select
+    
     Application.ScreenUpdating = True
     
     MsgBox "CHARM " & file_type_to_open & " file " & vbCrLf _
@@ -1107,8 +1135,8 @@ Sub CopyDataFromFile(ws_target As Worksheet, _
     src.Close False             ' FALSE - DON'T SAVE THE SOURCE FILE.
     Set src = Nothing
     
-    'update the first column to text values
-    CleanAndUpdateColumnValuesToText ws_target, "A"
+'    'update the first column to text values
+'    CleanAndUpdateColumnValuesToText ws_target, "A"
     
     Application.ScreenUpdating = True
     
@@ -1120,7 +1148,7 @@ ErrHandler:
     Application.ScreenUpdating = True
 End Sub
 
-Public Sub CleanAndUpdateColumnValuesToText(ws_target As Worksheet, update_col As String, _
+Private Sub CleanAndUpdateColumnValuesToText(ws_target As Worksheet, update_col As String, _
                                     Optional start_row As Integer = 2, _
                                     Optional deleteRowsOfBlankValues As Boolean = True)
     
@@ -1403,7 +1431,7 @@ Private Function ValidateGivenSpecimenTimepointColumn(col As String) As Validati
     ValidateGivenSpecimenTimepointColumn = valid_result
 End Function
 
-Public Function ValidateVisitDates() As ValidationResults
+Private Function ValidateVisitDates() As ValidationResults
     Dim visit_col_name As String, ws_name As String
     Dim visit_col As Range, subject_col As Range, cell As Range
     Dim used_rows As Integer
@@ -1945,6 +1973,16 @@ Public Function convertDate(date_val As String, Optional format_str As String = 
 '        out = ""
 '    End If
 '    convertDate = out
+End Function
+
+Public Function GetManifestComments(specimentPrep As String)
+    Dim comment As String
+    
+    comment = GetCommentsBySpecimenPrep(specimentPrep)
+    
+    comment = comment + IIf(Len(Trim(comment)) > 0, "| ", "") + "CHARM2 Shipment: " + GetConfigParameterValueByColumn("Last Loaded Shipment File", "B")
+    
+    GetManifestComments = comment
 End Function
 
 '--------------------------------------

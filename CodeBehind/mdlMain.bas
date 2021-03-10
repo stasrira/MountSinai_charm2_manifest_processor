@@ -1,7 +1,7 @@
 Attribute VB_Name = "mdlMain"
 Option Explicit
 
-Public Const Version = "1.01"
+Public Const Version = "1.02"
 
 Private Const ShipmentWrkSheet = "shipment"
 Private Const DemographicWrkSheet = "study_demographic"
